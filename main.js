@@ -16,6 +16,19 @@ const LINE_MOVE_SECONDS = 1.2;     // ライン移動にかける秒数
 const START_DISPLAY_SECONDS = 1.2; // 事件係前で見せる秒数
 const ENTRY_COOLDOWN_SECONDS = 0.4;
 
+// 効果音（同ディレクトリに mp3 を置いてください）
+const seCorrect = new Audio('se_correct.mp3');
+const seWrong   = new Audio('se_wrong.mp3');
+const seStart   = new Audio('se_start.mp3');
+
+function playSE(audio) {
+    if (!audio) return;
+    try {
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+    } catch (_) {}
+}
+
 // 部屋名定義（8部屋）
 const ROOM_NAMES = {
     1: '第１室',
@@ -174,17 +187,21 @@ class Game {
             outsideQueue: [],
             tokensInGrid: [],
             grid: this.initializeGrid(),
-            lastSpawnTime: this.difficulty.spawn_intervals[0], // 初回即スポーン
+            lastSpawnTime: 0,
             spawnInterval: this.difficulty.spawn_intervals[0],
             elapsedTime: 0,
             correctCount: 0,
             wrongCount: 0,
             stuckCount: 0,
-            maxCombo: 0
+            maxCombo: 0,
+            countdownActive: true,
+            countdownValue: 3,
+            countdownTimer: 0
         };
-        this.lastFrameTime = null;
+        // 最初のトークンを必ず事件係前に出す
+        this.enqueueToken();
 
-        // ここを変更：RAFで開始する
+        this.lastFrameTime = null;
         requestAnimationFrame((t) => this.gameLoop(t));
     }
 
@@ -243,6 +260,27 @@ class Game {
     }
 
     updateGame(deltaSec) {
+        // カウントダウン中は時間・スポーン・移動を止める
+        if (this.gameState.countdownActive) {
+            this.gameState.countdownTimer += deltaSec;
+            if (this.gameState.countdownTimer >= 1) {
+                this.gameState.countdownTimer = 0;
+                this.gameState.countdownValue -= 1;
+                if (this.gameState.countdownValue <= 0) {
+                    playSE(seStart); // カウントダウン終了音
+                    this.gameState.countdownActive = false;
+                    // カウント終了後に経過時間とスポーン計測をリセット
+                    this.gameState.elapsedTime = 0;
+                    this.gameState.lastSpawnTime = 0;
+                }
+            }
+            // ヘッダー表示はこのまま更新
+            document.getElementById('score').textContent = this.gameState.score;
+            document.getElementById('time').textContent = Math.ceil(this.gameState.timeLeft);
+            document.getElementById('life').textContent = '❤'.repeat(Math.max(0, this.gameState.life));
+            return;
+        }
+
         this.gameState.elapsedTime += deltaSec;
         this.gameState.timeLeft = Math.max(0, 60 - this.gameState.elapsedTime);
 
@@ -255,24 +293,7 @@ class Game {
         this.gameState.lastSpawnTime += deltaSec;
         if (this.gameState.lastSpawnTime >= this.gameState.spawnInterval) {
             if ((this.gameState.outsideQueue.length + this.gameState.tokensInGrid.length) < this.difficulty.max_tokens) {
-                const tokenNum = Math.floor(Math.random() * 8) + 1;
-                this.gameState.outsideQueue.push({
-                    id: this.tokenId++,
-                    number: tokenNum,
-                    state: 'OUTSIDE',
-                    moveSteps: 0,
-                    stuckTime: 0,
-                    spawnOrder: this.tokenId,
-                    displayAtStart: true,
-                    displayDuration: START_DISPLAY_SECONDS, // ゆっくり見せる
-                    entryCooldown: ENTRY_COOLDOWN_SECONDS,  // 少し待ってから侵入
-                    moveStage: 0,
-                    moveProgress: 0,
-                    currentR: null,
-                    currentC: null,
-                    nextR: null,
-                    nextC: null
-                });
+                this.enqueueToken();
             }
             this.gameState.lastSpawnTime = 0;
         }
@@ -444,6 +465,8 @@ class Game {
         const feedback = document.getElementById('feedback');
         feedback.textContent = message;
         feedback.className = `feedback ${type}`;
+        if (type === 'correct') playSE(seCorrect);
+        if (type === 'wrong' || type === 'stuck') playSE(seWrong);
         setTimeout(() => {
             feedback.textContent = '';
             feedback.className = '';
@@ -472,6 +495,27 @@ class Game {
         document.getElementById('life').textContent = '❤❤❤';
         this.gameState = null;
         this.render();
+    }
+
+    enqueueToken() {
+        const tokenNum = Math.floor(Math.random() * 8) + 1;
+        this.gameState.outsideQueue.push({
+            id: this.tokenId++,
+            number: tokenNum,
+            state: 'OUTSIDE',
+            moveSteps: 0,
+            stuckTime: 0,
+            spawnOrder: this.tokenId,
+            displayAtStart: true,
+            displayDuration: START_DISPLAY_SECONDS,
+            entryCooldown: ENTRY_COOLDOWN_SECONDS,
+            moveStage: 0,
+            moveProgress: 0,
+            currentR: null,
+            currentC: null,
+            nextR: null,
+            nextC: null
+        });
     }
 
     render() {
@@ -615,6 +659,17 @@ class Game {
                 this.drawArrow(pos.x, pos.y, cell.currentDirection, layout.nodeSize / 5.5);
                 this.drawDirectionIndicator(pos.x, pos.y, cell.currentDirection, layout.nodeSize / 6);
             }
+        }
+
+        // カウントダウン表示（中央）
+        if (this.gameState && this.gameState.countdownActive) {
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            ctx.fillStyle = '#fff';
+            ctx.font = `bold ${layout.nodeSize}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(this.gameState.countdownValue, this.canvas.width / 2, this.canvas.height / 2);
         }
     }
 
