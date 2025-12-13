@@ -12,7 +12,15 @@ const DIRECTION_DELTAS = {
     'W': [0, -1]
 };
 
-const LINE_MOVE_SECONDS = 1.2;     // ライン移動にかける秒数
+const LINE_MOVE_SECONDS = 1.2; // 使わないが残置（後方互換）
+
+// 難易度別の終盤加速設定
+const SPEED_RAMP = {
+    easy:   { base: 1.2, min: 0.95 },
+    normal: { base: 1.05, min: 0.65 },
+    hard:   { base: 0.95, min: 0.50 }
+};
+
 const START_DISPLAY_SECONDS = 1.2; // 事件係前で見せる秒数
 const ENTRY_COOLDOWN_SECONDS = 0.4;
 
@@ -79,6 +87,7 @@ class Game {
         this.canvas.addEventListener('touchstart', (e) => this.handleCanvasClick(e.touches[0]));
 
         this.lastFrameTime = null;    // 追加: RAF用
+        this.difficultyKey = 'easy';
     }
 
     resizeCanvas() {
@@ -174,6 +183,7 @@ class Game {
     }
 
     startGame(difficulty) {
+        this.difficultyKey = difficulty;
         this.difficulty = DIFFICULTY[difficulty];
         document.getElementById('difficulty-select').style.display = 'none';
         this.gameRunning = true;
@@ -360,8 +370,8 @@ class Game {
                     }
                 }
             } else if (token.moveStage === 1) {
-                // ライン移動を時間で進行（ゆっくり）
-                token.moveProgress += deltaSec / LINE_MOVE_SECONDS;
+                const lineSec = this.getLineMoveSeconds();
+                token.moveProgress += deltaSec / lineSec;
                 if (token.moveProgress >= 1.0) {
                     token.moveProgress = 0;
                     token.moveStage = 2;
@@ -740,10 +750,20 @@ class Game {
         ctx.closePath();
         ctx.fill();
     }
+
+    getLineMoveSeconds() {
+        const cfg = SPEED_RAMP[this.difficultyKey] || SPEED_RAMP.normal;
+        const base = cfg.base;
+        const min  = cfg.min;
+        const progress = Math.min(1, this.gameState ? (this.gameState.elapsedTime / 60) : 0);
+        return base - (base - min) * progress; // 終盤ほど速く
+    }
 }
 
 function getCanvasSize() {
-    const width = window.innerWidth;
+    const sidebar = document.getElementById('sidebar');
+    const sidebarWidth = sidebar ? sidebar.getBoundingClientRect().width : 0;
+    const width = Math.max(320, window.innerWidth - sidebarWidth);
     const height = window.innerHeight;
     return { width, height };
 }

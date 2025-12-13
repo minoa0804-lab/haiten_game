@@ -3,29 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>事件記録ルーティングゲーム</title>
+    <title>事件配点ゲーム</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="game-container">
-        <div id="header">
-            <div id="title">事件記録ルーティングゲーム</div>
-            <div id="stats">
-                <div class="stat">
-                    <span class="label">スコア:</span>
-                    <span id="score">0</span>
-                </div>
-                <div class="stat">
-                    <span class="label">時間:</span>
-                    <span id="time">60</span>
-                </div>
-                <div class="stat">
-                    <span class="label">ライフ:</span>
-                    <span id="life">❤❤❤</span>
-                </div>
-            </div>
-        </div>
-
+<div id="game-container">
+    <div id="main-area">
         <div id="difficulty-select">
             <h2>難易度を選択</h2>
             <button class="diff-btn" data-difficulty="easy">イージー</button>
@@ -51,6 +34,26 @@
         </div>
     </div>
 
-    <script src="main.js"></script>
+    <aside id="sidebar">
+        <div id="header">
+            <div id="title">事件配点ゲーム</div>
+            <div id="stats">
+                <div class="stat">
+                    <span class="label">スコア</span>
+                    <span id="score">0</span>
+                </div>
+                <div class="stat">
+                    <span class="label">時間</span>
+                    <span id="time">60</span>
+                </div>
+                <div class="stat">
+                    <span class="label">ライフ</span>
+                    <span id="life">❤❤❤</span>
+                </div>
+            </div>
+        </div>
+    </aside>
+</div>
+<script src="main.js"></script>
 </body>
 </html>
