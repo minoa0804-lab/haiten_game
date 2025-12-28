@@ -2,8 +2,9 @@
 // 事件記録ルーティングゲーム - メインロジック
 // ============================================================================
 
-const GRID_ROWS = 4;
-const GRID_COLS = 4;
+// 2x2マス構成（交点は3x3）
+const GRID_ROWS = 3;
+const GRID_COLS = 3;
 const DIRECTIONS = ['N', 'E', 'S', 'W'];
 const DIRECTION_DELTAS = {
     'N': [-1, 0],
@@ -16,9 +17,9 @@ const LINE_MOVE_SECONDS = 1.2; // 使わないが残置（後方互換）
 
 // 難易度別の終盤加速設定
 const SPEED_RAMP = {
-    easy:   { base: 1.2, min: 0.95 },
+    easy: { base: 1.2, min: 0.95 },
     normal: { base: 1.05, min: 0.65 },
-    hard:   { base: 0.95, min: 0.50 }
+    hard: { base: 0.95, min: 0.50 }
 };
 
 const START_DISPLAY_SECONDS = 1.2; // 事件係前で見せる秒数
@@ -26,34 +27,32 @@ const ENTRY_COOLDOWN_SECONDS = 0.4;
 
 // 効果音（同ディレクトリに mp3 を置いてください）
 const seCorrect = new Audio('se_correct.mp3');
-const seWrong   = new Audio('se_wrong.mp3');
-const seStart   = new Audio('se_start.mp3');
+const seWrong = new Audio('se_wrong.mp3');
+const seStart = new Audio('se_start.mp3');
 
 function playSE(audio) {
     if (!audio) return;
     try {
         audio.currentTime = 0;
-        audio.play().catch(() => {});
-    } catch (_) {}
+        audio.play().catch(() => { });
+    } catch (_) { }
 }
 
-// 部屋名定義（8部屋）
+// 部屋名定義（6部屋）
 const ROOM_NAMES = {
     1: '第１室',
     2: '第２室',
     3: '第３室',
     4: '第４室',
     5: '第５室',
-    6: '第６室',
-    7: '第７室',
-    8: '第８室'
+    6: '第６室'
 };
 
 // 難易度設定をゆっくりめに
 const DIFFICULTY = {
-    easy:   { tick_seconds: 1.2, max_tokens: 2, spawn_intervals: [9, 8, 7], arrow_init: 'biased' },
+    easy: { tick_seconds: 1.2, max_tokens: 2, spawn_intervals: [9, 8, 7], arrow_init: 'biased' },
     normal: { tick_seconds: 1.0, max_tokens: 3, spawn_intervals: [8, 7, 6], arrow_init: 'random' },
-    hard:   { tick_seconds: 0.9, max_tokens: 3, spawn_intervals: [7, 6, 5], arrow_init: 'biased' }
+    hard: { tick_seconds: 0.9, max_tokens: 3, spawn_intervals: [7, 6, 5], arrow_init: 'biased' }
 };
 
 class Game {
@@ -84,7 +83,10 @@ class Game {
 
         // キャンバスクリック/タッチ
         this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
-        this.canvas.addEventListener('touchstart', (e) => this.handleCanvasClick(e.touches[0]));
+        this.canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // ダブルタップ（タッチ＋クリック）防止
+            this.handleCanvasClick(e.touches[0]);
+        }, { passive: false });
 
         this.lastFrameTime = null;    // 追加: RAF用
         this.difficultyKey = 'easy';
@@ -111,10 +113,10 @@ class Game {
     calculateLayout() {
         const canvasWidth = this.canvas.width;
         const canvasHeight = this.canvas.height;
-        
+
         const horizontalMargin = canvasWidth * 0.08;
         const verticalMargin = canvasHeight * 0.08;
-        
+
         const usableWidth = canvasWidth - (horizontalMargin * 2);
         const usableHeight = canvasHeight - (verticalMargin * 2);
 
@@ -122,7 +124,7 @@ class Game {
             usableWidth / GRID_COLS,
             usableHeight / GRID_ROWS
         );
-        
+
         const nodeSize = Math.min(maxNodeSize, 60);
 
         const gridStartX = (canvasWidth - nodeSize * GRID_COLS) / 2;
@@ -159,22 +161,24 @@ class Game {
     getRoomInfo(roomNum) {
         const layout = this.calculateLayout();
         const padding = layout.padding;
-        const endNodePos = this.getNodePos(3, 3);
+        const lastRowIdx = GRID_ROWS - 1;
+        const lastColIdx = GRID_COLS - 1;
+        const endNodePos = this.getNodePos(lastRowIdx, lastColIdx);
         const nodeSize = layout.nodeSize;
 
         let pos = {};
         let label = ROOM_NAMES[roomNum] || `部屋${roomNum}`;
 
-        if (roomNum <= 4) {
-            // 右側の部屋（1～4）
+        if (roomNum <= 3) {
+            // 右側の部屋（1～3）
             const roomIndex = roomNum - 1;
-            const startY = this.getNodePos(0, 3).y;
+            const startY = this.getNodePos(0, lastColIdx).y;
             pos.x = endNodePos.x + padding + 30;
             pos.y = startY + roomIndex * nodeSize;
         } else {
-            // 下側の部屋（5～8）
-            const roomIndex = roomNum - 5;
-            const startX = this.getNodePos(3, 0).x;
+            // 下側の部屋（4～6）
+            const roomIndex = roomNum - 4;
+            const startX = this.getNodePos(lastRowIdx, 0).x;
             pos.x = startX + roomIndex * nodeSize;
             pos.y = endNodePos.y + padding + 30;
         }
@@ -426,12 +430,12 @@ class Game {
         const nextR = r + delta[0];
         const nextC = c + delta[1];
 
-        // 部屋判定（4列目と3行目）
-        if (c === 3 && r < 4) {
+        // 部屋判定（最終列と最終行）
+        if (c === GRID_COLS - 1 && r < GRID_ROWS) {
             if (dir === 'E') return { room: 1 + r };
         }
-        if (r === 3 && c < 4) {
-            if (dir === 'S') return { room: 5 + c };
+        if (r === GRID_ROWS - 1 && c < GRID_COLS) {
+            if (dir === 'S') return { room: GRID_ROWS + 1 + c };
         }
 
         // グリッド内
@@ -508,7 +512,7 @@ class Game {
     }
 
     enqueueToken() {
-        const tokenNum = Math.floor(Math.random() * 8) + 1;
+        const tokenNum = Math.floor(Math.random() * 6) + 1;
         this.gameState.outsideQueue.push({
             id: this.tokenId++,
             number: tokenNum,
@@ -640,7 +644,7 @@ class Game {
         }
 
         // 部屋表示
-        for (let room = 1; room <= 8; room++) {
+        for (let room = 1; room <= 6; room++) {
             const roomInfo = this.getRoomInfo(room);
             const pos = roomInfo.pos;
             const boxWidth = 65;
@@ -708,10 +712,10 @@ class Game {
         const headSize = size * 0.5;
         ctx.beginPath();
         ctx.moveTo(arrowX, arrowY);
-        ctx.lineTo(arrowX - Math.cos(angle + Math.PI / 6) * headSize, 
-                   arrowY - Math.sin(angle + Math.PI / 6) * headSize);
-        ctx.lineTo(arrowX - Math.cos(angle - Math.PI / 6) * headSize, 
-                   arrowY - Math.sin(angle - Math.PI / 6) * headSize);
+        ctx.lineTo(arrowX - Math.cos(angle + Math.PI / 6) * headSize,
+            arrowY - Math.sin(angle + Math.PI / 6) * headSize);
+        ctx.lineTo(arrowX - Math.cos(angle - Math.PI / 6) * headSize,
+            arrowY - Math.sin(angle - Math.PI / 6) * headSize);
         ctx.closePath();
         ctx.fill();
     }
@@ -743,10 +747,10 @@ class Game {
         const headSize = size * 0.35;
         ctx.beginPath();
         ctx.moveTo(endX, endY);
-        ctx.lineTo(endX - Math.cos(angle + Math.PI / 6) * headSize, 
-                   endY - Math.sin(angle + Math.PI / 6) * headSize);
-        ctx.lineTo(endX - Math.cos(angle - Math.PI / 6) * headSize, 
-                   endY - Math.sin(angle - Math.PI / 6) * headSize);
+        ctx.lineTo(endX - Math.cos(angle + Math.PI / 6) * headSize,
+            endY - Math.sin(angle + Math.PI / 6) * headSize);
+        ctx.lineTo(endX - Math.cos(angle - Math.PI / 6) * headSize,
+            endY - Math.sin(angle - Math.PI / 6) * headSize);
         ctx.closePath();
         ctx.fill();
     }
@@ -754,18 +758,28 @@ class Game {
     getLineMoveSeconds() {
         const cfg = SPEED_RAMP[this.difficultyKey] || SPEED_RAMP.normal;
         const base = cfg.base;
-        const min  = cfg.min;
+        const min = cfg.min;
         const progress = Math.min(1, this.gameState ? (this.gameState.elapsedTime / 60) : 0);
         return base - (base - min) * progress; // 終盤ほど速く
     }
 }
 
 function getCanvasSize() {
-    const sidebar = document.getElementById('sidebar');
-    const sidebarWidth = sidebar ? sidebar.getBoundingClientRect().width : 0;
-    const width = Math.max(320, window.innerWidth - sidebarWidth);
-    const height = window.innerHeight;
-    return { width, height };
+    const mainArea = document.getElementById('main-area');
+    const dpr = window.devicePixelRatio || 1;
+
+    if (mainArea) {
+        const rect = mainArea.getBoundingClientRect();
+        // キャンバスの実サイズをデバイスピクセルで設定し、スタイルはCSSの100%に任せる
+        const width = Math.max(320, Math.floor(rect.width * dpr));
+        const height = Math.max(320, Math.floor(rect.height * dpr));
+        return { width, height };
+    }
+
+    // フォールバック（通常は通らない）
+    const fallbackWidth = Math.max(320, window.innerWidth);
+    const fallbackHeight = Math.max(320, window.innerHeight);
+    return { width: Math.floor(fallbackWidth * dpr), height: Math.floor(fallbackHeight * dpr) };
 }
 
 window.addEventListener('DOMContentLoaded', () => {
